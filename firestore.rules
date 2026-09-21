@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Chaque utilisateur ne peut lire/écrire que dans son propre sous-arbre
+    // users/{son-uid}/... Il n'y a qu'un seul vrai utilisateur (Joas) mais
+    // ça reste propre et sécurisé si jamais un jour tu ajoutes un compte.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

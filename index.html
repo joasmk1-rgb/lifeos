@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life OS — Joas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="auth-screen" class="auth-wrap">
+  <div class="auth-card">
+    <h1>🧭 Life OS</h1>
+    <div class="auth-tabs">
+      <button id="tab-login" class="active">Connexion</button>
+      <button id="tab-signup">Créer le compte</button>
+    </div>
+    <form id="auth-form">
+      <div class="form-inline" style="flex-direction:column">
+        <input type="email" id="auth-email" placeholder="Email" required>
+        <input type="password" id="auth-password" placeholder="Mot de passe" required>
+      </div>
+      <button type="submit" class="btn" style="width:100%">Continuer</button>
+    </form>
+    <p id="auth-error" class="auth-error hidden"></p>
+    <p class="muted" style="margin-top:14px;font-size:12px">Premier lancement ? Utilise "Créer le compte" une seule fois — ensuite reconnecte-toi avec Connexion.</p>
+  </div>
+</div>
+
+<div class="app hidden" id="app-root">
+  <nav>
+    <h1>🧭 Life OS</h1>
+    <button data-page="dashboard" class="active">📊 Dashboard</button>
+    <button data-page="habitudes">✅ Routine & Habitudes</button>
+    <button data-page="emploi">💼 Recherche d'emploi</button>
+    <button data-page="skills">📈 Montée en compétences</button>
+    <button data-page="projets">🚀 Projets entrepreneuriaux</button>
+    <button data-page="calendrier">📅 Calendrier</button>
+    <button data-page="notes">📝 Notes</button>
+    <button data-page="reglages">⚙️ Réglages</button>
+  </nav>
+  <main id="main"></main>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
