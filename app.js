@@ -786,7 +786,7 @@ pages.nutrition = () => {
         <span class="pill">${e.kcal || 0} kcal</span>
         <span class="muted" style="font-size:12px">P${e.protein||0} G${e.carbs||0} L${e.fat||0}</span>
         <button class="close-x" data-del-nutri="${e.id}">✕</button>
-      </div>`).join("") : '<div class="empty">Rien loggé aujourd\\'hui.</div>'}
+      </div>`).join("") : '<div class="empty">Rien loggé aujourd\'hui.</div>'}
   </div>`;
 };
 
@@ -1063,7 +1063,7 @@ pages.devperso = () => {
           </div>
         </div>
         ${d.notes ? `<div class="muted">${d.notes.replace(/</g,"&lt;")}</div>` : ""}
-      </div>`).join("") : '<div class="empty">Rien pour l\\'instant.</div>'}
+      </div>`).join("") : '<div class="empty">Rien pour l\'instant.</div>'}
   </div>`;
 };
 
