@@ -32,7 +32,7 @@ const state = {
   bookingRules: [], blockedSlots: [], bookingRequests: [],
   loisirsEvents: [], actus: [], counterLog: {}, devPerso: [], mesures: [], repas: [],
   foodGoals: [], courses: [], depenses: [], budgetSettings: {},
-  nutritionGoals: {}, nutritionLog: [], budgetCharges: {}, objectifs: [],
+  nutritionGoals: {}, nutritionLog: [], budgetCharges: {}, objectifs: [], investissements: [], achats: [],
 };
 let unsubscribers = [];
 
@@ -141,6 +141,8 @@ function attachListeners() {
   bind("courses", "courses", (a, b) => (a.addedAt || "").localeCompare(b.addedAt || ""));
   bind("depenses", "depenses", (a, b) => (b.date || "").localeCompare(a.date || ""));
   bind("objectifs", "objectifs", (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+  bind("investissements", "investissements", (a, b) => (b.date || "").localeCompare(a.date || ""));
+  bind("achats", "achats", (a, b) => (b.date || "").localeCompare(a.date || ""));
 
   const unsubBudget = onSnapshot(doc(dbFS, "users", uid, "settings", "budget"), (d) => {
     state.budgetSettings = d.exists() ? d.data() : {};
@@ -221,6 +223,7 @@ function navigate(page, silent) {
 
 /* ---------- PRIORITÉS (matrice urgence / impact, selon la portée jour/semaine/mois) ---------- */
 let prioScope = "semaine";
+const PRIO_SCOPE_LABELS = { jour: "Jour", semaine: "Semaine", mois: "Mois" };
 function buildPriorityItems(scope) {
   const items = [];
   const today = new Date(); today.setHours(0,0,0,0);
@@ -281,6 +284,24 @@ function buildPriorityItems(scope) {
     items.push({ title: `Réponse à ${r.name}`, source: "Réservation", urgency: 70, impact: 50, detail: fmtDate(r.date) });
   });
 
+  // Objectifs financiers — rappel selon leur terme (court terme = semaine+mois, long terme = mois seulement)
+  if (scope !== "jour") {
+    const capacite = capaciteEpargneMensuelle();
+    state.objectifs.forEach((o) => {
+      const horizonO = o.horizon || "long";
+      if (scope === "semaine" && horizonO !== "court") return;
+      const remaining = Math.max(0, (o.targetAmount || 0) - (o.savedAmount || 0));
+      if (remaining <= 0) return;
+      const bloque = capacite <= 0;
+      items.push({
+        title: `🎯 ${o.name}`, source: "Objectif",
+        urgency: bloque ? 70 : (horizonO === "court" ? 45 : 25),
+        impact: 75,
+        detail: bloque ? "capacité d'épargne insuffisante actuellement" : `${remaining.toFixed(2)}€ restants`,
+      });
+    });
+  }
+
   // Événements calendrier dans l'horizon de la vue
   state.events.forEach((e) => {
     const d = daysFrom(new Date(e.date + "T00:00:00"));
@@ -318,13 +339,11 @@ pages.priorites = () => {
       ${it.detail ? `<div class="muted" style="font-size:11px">${it.detail}</div>` : ""}
     </div>`).join("") : '<p class="empty" style="padding:0">Rien ici.</p>';
 
-  const SCOPE_LABELS = { jour: "Jour", semaine: "Semaine", mois: "Mois" };
-
   return `
   <h2>🎯 Priorités</h2>
-  <p class="muted">Vue automatique sur tous les modules — classée par urgence (délai) et impact (importance). Change de vue pour changer l'horizon pris en compte.</p>
+  <p class="muted">Vue automatique sur tous les modules — classée par urgence (délai) et impact (importance). Change de vue pour changer l'horizon pris en compte. Ce même panneau apparaît aussi dans les onglets concernés (Routine & Habitudes, Objectifs...) pour que tout reste connecté.</p>
   <div class="view-selector">
-    ${Object.entries(SCOPE_LABELS).map(([k, l]) => `<button data-prio-scope="${k}" class="${k === prioScope ? "active" : ""}">${l}</button>`).join("")}
+    ${Object.entries(PRIO_SCOPE_LABELS).map(([k, l]) => `<button data-prio-scope="${k}" class="${k === prioScope ? "active" : ""}">${l}</button>`).join("")}
   </div>
   <div class="priority-matrix">
     <div class="priority-quadrant q-urgent-important"><h4>🔥 Urgent & important — à faire maintenant</h4>${renderCards(q.ui)}</div>
@@ -333,6 +352,28 @@ pages.priorites = () => {
     <div class="priority-quadrant q-neither"><h4>💤 Ni urgent ni important</h4>${renderCards(q.n)}</div>
   </div>`;
 };
+
+/* Mini-panneau Priorités réutilisable, embarqué dans d'autres onglets pour que le site reste "connecté" */
+function miniPrioritesHTML(filterSources) {
+  const items = buildPriorityItems(prioScope).filter((it) => !filterSources || filterSources.includes(it.source));
+  const sorted = items.sort((a, b) => (b.urgency + b.impact) - (a.urgency + a.impact)).slice(0, 6);
+  return `
+  <div class="card">
+    <div class="flex-between" style="margin-bottom:8px">
+      <strong>🎯 Priorités liées</strong>
+      <span class="muted" data-goto="priorites" style="cursor:pointer;text-decoration:underline">Voir tout →</span>
+    </div>
+    <div class="view-selector" style="margin-bottom:10px">
+      ${Object.entries(PRIO_SCOPE_LABELS).map(([k, l]) => `<button data-prio-scope="${k}" class="${k === prioScope ? "active" : ""}">${l}</button>`).join("")}
+    </div>
+    ${sorted.length ? sorted.map((it) => `
+      <div class="priority-card">
+        <div class="p-source">${it.source}</div>
+        <div>${it.title}</div>
+        ${it.detail ? `<div class="muted" style="font-size:11px">${it.detail}</div>` : ""}
+      </div>`).join("") : '<p class="empty" style="padding:0">Rien de pressant ici pour l\'instant.</p>'}
+  </div>`;
+}
 
 /* ---------- DASHBOARD ---------- */
 pages.dashboard = () => {
@@ -345,10 +386,10 @@ pages.dashboard = () => {
   return `
   <h2>Bonjour Joas 👋 <span class="today-badge">${fmtDate(t)}</span></h2>
   <div class="grid-cards">
-    <div class="card"><div class="stat">${doneCount}/${state.habits.length}</div><div class="stat-label">habitudes aujourd'hui</div></div>
-    <div class="card"><div class="stat">${activeJobs}</div><div class="stat-label">candidatures en cours</div></div>
-    <div class="card"><div class="stat">${state.projects.length}</div><div class="stat-label">projets entrepreneuriaux</div></div>
-    <div class="card"><div class="stat">${upcoming.length}</div><div class="stat-label">événements à venir</div></div>
+    <div class="card clickable" data-goto="habitudes"><div class="stat">${doneCount}/${state.habits.length}</div><div class="stat-label">habitudes aujourd'hui</div></div>
+    <div class="card clickable" data-goto="emploi"><div class="stat">${activeJobs}</div><div class="stat-label">candidatures en cours</div></div>
+    <div class="card clickable" data-goto="projets"><div class="stat">${state.projects.length}</div><div class="stat-label">projets entrepreneuriaux</div></div>
+    <div class="card clickable" data-goto="calendrier"><div class="stat">${upcoming.length}</div><div class="stat-label">événements à venir</div></div>
   </div>
   <div class="section-title">Routine du jour</div>
   <div class="card">
@@ -367,9 +408,49 @@ pages.dashboard = () => {
     ${actusUpcomingDash().length ? actusUpcomingDash().map((a) => `
       <div class="row"><span class="pill">dans ${daysUntil(a._next)}j</span><span><strong>${a.person}</strong> — ${a.title}</span></div>
     `).join("") : '<div class="empty">Aucune actu — ajoute-en dans la page Actus.</div>'}
-  </div>`;
+  </div>
+  <div class="section-title">Tous tes modules en un coup d'œil</div>
+  <div class="grid-cards">${dashboardModuleCards()}</div>`;
 };
 function actusUpcomingDash() { return actusUpcoming(4); }
+
+function dashboardModuleCards() {
+  const t = todayStr();
+  const pendingReq = state.bookingRequests.filter((r) => r.status === "pending").length;
+  const monthKey = currentMonthKey();
+  const budget = state.budgetSettings.monthlyLimit || 0;
+  const itemsWithPrice = state.courses.filter((c) => c.bought && c.price != null).reduce((s,c)=>s+c.price,0);
+  const sumDep = state.depenses.filter((d)=>(d.date||"").startsWith(monthKey)).reduce((s,d)=>s+d.amount,0);
+  const remainingCourses = budget - (itemsWithPrice + sumDep);
+  const capacite = capaciteEpargneMensuelle();
+  const totalThisMonthDep = combinedExpenses().filter((e) => (e.date||"").startsWith(monthKey)).reduce((s,e)=>s+e.amount,0);
+  const totalInvesti = state.investissements.reduce((s,i)=>s+(i.montantInvesti||0),0);
+  const totalActuelInvest = state.investissements.reduce((s,i)=>s+(i.valeurActuelle??i.montantInvesti??0),0);
+  const gainInvest = totalActuelInvest - totalInvesti;
+  const nutritionCount = state.nutritionLog.filter((n)=>(n.date||"")===t).length;
+  const doneToday = state.habitLog[t] || {};
+  const routinesRestantes = state.habits.filter(h=>(h.type||"daily")==="daily" && !doneToday[h.id]).length;
+
+  const cards = [
+    { page: "skills", icon: "📈", label: "Montée en compétences", value: `${state.skills.length} compétence(s) suivie(s)` },
+    { page: "reservation", icon: "🔗", label: "Réservation", value: pendingReq ? `${pendingReq} demande(s) en attente` : "Aucune demande en attente" },
+    { page: "loisirs", icon: "🎉", label: "Loisirs", value: `${state.loisirsEvents.length} événement(s) prévu(s)` },
+    { page: "devperso", icon: "🌱", label: "Développement perso", value: `${state.devPerso.length} élément(s) suivi(s)` },
+    { page: "sante", icon: "🏃", label: "Repas, Sport & Nutrition", value: `${routinesRestantes ? routinesRestantes + " routine(s) restante(s)" : "routines du jour ok"} · ${nutritionCount} repas loggé(s) aujourd'hui` },
+    { page: "courses", icon: "🛒", label: "Courses & Budget", value: `${remainingCourses.toFixed(2)}€ restant ce mois` },
+    { page: "analysefinances", icon: "📊", label: "Analyse dépenses", value: `${totalThisMonthDep.toFixed(2)}€ dépensés ce mois` },
+    { page: "budgetmensuel", icon: "📋", label: "Budget mensuel", value: `${capacite.toFixed(2)}€/mois d'épargne` },
+    { page: "objectifs", icon: "💰", label: "Objectifs", value: `${state.objectifs.length} objectif(s) en cours` },
+    { page: "investissement", icon: "📈", label: "Investissements", value: state.investissements.length ? `${gainInvest >= 0 ? "+" : ""}${gainInvest.toFixed(2)}€ de gain/perte` : "Aucun investissement" },
+    { page: "notes", icon: "📝", label: "Notes", value: `${state.notes.length} note(s)` },
+  ];
+  return cards.map((c) => `
+    <div class="card clickable" data-goto="${c.page}">
+      <div style="font-size:22px">${c.icon}</div>
+      <div style="font-weight:600;margin:4px 0 2px">${c.label}</div>
+      <div class="stat-label">${c.value}</div>
+    </div>`).join("");
+}
 
 /* ---------- HABITUDES / ROUTINES (quotidien / périodique / compteur mensuel) ---------- */
 function computeStreak(habitId) {
@@ -433,6 +514,8 @@ pages.habitudes = () => {
   const t = todayStr();
   return `
   <h2>✅ Routine & Habitudes</h2>
+  <div class="split-view">
+  <div class="split-left">
   <div class="card">
     <div class="flex-between" style="margin-bottom:10px"><strong>${fmtDate(t)}</strong></div>
     ${state.habits.map(renderHabitRow).join("") || '<div class="empty">Aucune routine — ajoute la première ci-dessous.</div>'}
@@ -456,6 +539,9 @@ pages.habitudes = () => {
       <button class="btn" id="add-habit">Ajouter</button>
     </div>
     <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone. La "portée" détermine dans quelle vue (Jour/Semaine/Mois) de 🎯 Priorités la tâche apparaîtra.</p>
+  </div>
+  </div>
+  <div class="split-right">${miniPrioritesHTML(["Routine"])}</div>
   </div>`;
 };
 
@@ -741,7 +827,10 @@ pages.repas = () => {
       const data = mealSlotData(dayMeals, k);
       return `
       <div class="row" style="align-items:flex-start;flex-direction:column;gap:6px">
-        <span style="font-weight:600">${l}</span>
+        <div class="flex-between" style="width:100%">
+          <span style="font-weight:600">${l}</span>
+          ${data.text ? `<button class="btn btn-sm secondary" data-meal-to-courses="${k}" title="Ajoute '${data.text}' à ta liste de courses">🛒 Ajouter aux courses</button>` : ""}
+        </div>
         <textarea data-meal="${k}" placeholder="Qu'est-ce que tu prévois ?" style="min-height:44px">${data.text}</textarea>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           ${Object.entries(FOOD_TAGS).map(([tk, tl]) => `
@@ -949,11 +1038,14 @@ function projectionHTML(remaining, capacite) {
   return `Atteignable dans <strong>${months} mois</strong> (vers <strong>${dateLabel}</strong>) à ${capacite.toFixed(2)}€/mois`;
 }
 
+const OBJECTIF_HORIZONS = { court: "Court terme", long: "Long terme" };
 pages.objectifs = () => {
   const capacite = capaciteEpargneMensuelle();
   return `
   <h2>💰 Objectifs financiers</h2>
   <p class="muted">Maison, voiture, voyage... pose un objectif, on simule quand c'est atteignable selon ta capacité d'épargne.</p>
+  <div class="split-view">
+  <div class="split-left">
   <div class="card">
     <div class="stat" style="color:${capacite < 0 ? 'var(--danger)' : 'var(--accent2)'}">${capacite.toFixed(2)}€ / mois</div>
     <div class="stat-label">capacité d'épargne actuelle (revenu − charges, réglable dans 📋 Budget mensuel)</div>
@@ -965,8 +1057,10 @@ pages.objectifs = () => {
       <input type="text" id="objectif-name" placeholder="Nom (ex: apport maison, voiture, voyage Japon)">
       <input type="number" step="0.01" id="objectif-target" placeholder="Montant cible (€)">
       <input type="number" step="0.01" id="objectif-saved" placeholder="Déjà épargné (€, optionnel)">
+      <select id="objectif-horizon">${Object.entries(OBJECTIF_HORIZONS).map(([k,l]) => `<option value="${k}">${l}</option>`).join("")}</select>
       <button class="btn" id="add-objectif">Ajouter</button>
     </div>
+    <p class="muted" style="margin-top:8px">Le "terme" détermine dans quelle vue (Semaine/Mois) de 🎯 Priorités cet objectif remonte comme rappel.</p>
   </div>
 
   ${state.objectifs.length ? state.objectifs.map((o) => {
@@ -975,7 +1069,7 @@ pages.objectifs = () => {
     return `
     <div class="card">
       <div class="flex-between">
-        <strong>${o.name}</strong>
+        <strong>${o.name}</strong> <span class="pill">${OBJECTIF_HORIZONS[o.horizon || "long"]}</span>
         <button class="close-x" data-del-objectif="${o.id}">✕</button>
       </div>
       <div class="muted" style="margin:4px 0 8px">${(o.savedAmount || 0).toFixed(2)}€ / ${(o.targetAmount || 0).toFixed(2)}€ (${pct}%)</div>
@@ -992,7 +1086,10 @@ pages.objectifs = () => {
       </div>
       <p data-sim-result="${o.id}" style="margin-top:6px">${projectionHTML(remaining, Math.max(0, capacite))}</p>
     </div>`;
-  }).join("") : '<p class="empty">Aucun objectif — ajoute-en un ci-dessus.</p>'}`;
+  }).join("") : '<p class="empty">Aucun objectif — ajoute-en un ci-dessus.</p>'}
+  </div>
+  <div class="split-right">${miniPrioritesHTML(["Objectif", "Budget"])}</div>
+  </div>`;
 };
 
 /* ---------- COURSES & BUDGET ---------- */
@@ -1004,6 +1101,12 @@ function csvDownload(filename, rows) {
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
+
+const DEPENSE_CATEGORIES = {
+  logement: "🏠 Logement", nourriture: "🍽️ Nourriture", transport: "🚗 Transport",
+  loisirs: "🎉 Loisirs", sante: "⚕️ Santé", shopping: "🛍️ Shopping",
+  abonnements: "📱 Abonnements", autre: "❓ Autre",
+};
 
 pages.courses = () => {
   const monthKey = currentMonthKey();
@@ -1054,19 +1157,198 @@ pages.courses = () => {
       <input type="date" id="dep-date" value="${todayStr()}">
       <input type="number" step="0.01" id="dep-amount" placeholder="Montant (€)">
       <input type="text" id="dep-label" placeholder="Label (ex: courses Colruyt)">
+      <select id="dep-category">${Object.entries(DEPENSE_CATEGORIES).map(([k,l]) => `<option value="${k}">${l}</option>`).join("")}</select>
       <button class="btn" id="add-depense">Ajouter</button>
       <button class="btn secondary" id="export-depenses">Exporter CSV</button>
     </div>
+    <div class="form-inline">
+      <label class="btn secondary" style="cursor:pointer;text-align:center">
+        📥 Importer un CSV (ex: extrait de compte que je t'ai généré)
+        <input type="file" id="depenses-csv-input" accept=".csv,text/csv" class="hidden">
+      </label>
+      <span id="depenses-csv-status" class="muted"></span>
+    </div>
+    <p class="muted" style="margin-top:8px">Envoie-moi ton extrait de compte (PDF ou capture) dans le chat, je t'en fais un CSV avec colonnes Date,Montant,Label,Catégorie, prêt à importer ici.</p>
   </div>
   <div class="card">
     ${depensesThisMonth.length ? depensesThisMonth.map((d) => `
       <div class="row">
         <span class="pill">${fmtDate(d.date)}</span>
         <span style="flex:1">${d.label || ""}</span>
+        <span class="pill">${DEPENSE_CATEGORIES[d.category] || DEPENSE_CATEGORIES.autre}</span>
         <span class="pill">${d.amount.toFixed(2)}€</span>
         <button class="close-x" data-del-depense="${d.id}">✕</button>
       </div>`).join("") : '<div class="empty">Aucune dépense ce mois.</div>'}
   </div>`;
+};
+
+/* ---------- ANALYSE DES DÉPENSES ---------- */
+function combinedExpenses() {
+  const fromDepenses = state.depenses.map((d) => ({ date: d.date, amount: d.amount, label: d.label || "", category: d.category || "autre" }));
+  const fromCourses = state.courses.filter((c) => c.bought && c.price != null).map((c) => ({ date: c.boughtAt || todayStr(), amount: c.price, label: c.name, category: "nourriture" }));
+  return [...fromDepenses, ...fromCourses];
+}
+function monthlyBarChart(months) {
+  const max = Math.max(1, ...months.map((m) => m.total));
+  return `
+    <div style="display:flex;align-items:flex-end;gap:6px;height:110px;margin-top:8px">
+      ${months.map((m) => `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end;height:100%">
+          <span style="font-size:11px;color:var(--muted)">${m.total ? m.total.toFixed(0)+"€" : ""}</span>
+          <div style="width:100%;background:var(--accent);border-radius:4px 4px 0 0;height:${(m.total / max) * 80}px;min-height:${m.total?4:0}px"></div>
+          <span style="font-size:10px;color:var(--muted)">${m.label}</span>
+        </div>`).join("")}
+    </div>`;
+}
+pages.analysefinances = () => {
+  const all = combinedExpenses();
+  const monthKey = currentMonthKey();
+  const thisMonth = all.filter((e) => (e.date || "").startsWith(monthKey));
+  const totalThisMonth = thisMonth.reduce((s, e) => s + e.amount, 0);
+
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const total = all.filter((e) => (e.date||"").startsWith(key)).reduce((s,e)=>s+e.amount,0);
+    months.push({ label: Grid.MONTHS_FULL[d.getMonth()].slice(0,3), total });
+  }
+
+  const byCat = {};
+  thisMonth.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + e.amount; });
+  const catRows = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
+  const maxCat = Math.max(1, ...catRows.map(([,v]) => v));
+
+  const topDepenses = [...thisMonth].sort((a,b) => b.amount - a.amount).slice(0, 8);
+
+  return `
+  <h2>📊 Analyse des dépenses</h2>
+  <p class="muted">Vue d'ensemble de tes dépenses (courses + dépenses libres) pour repérer où va ton argent.</p>
+  <div class="card">
+    <div class="stat">${totalThisMonth.toFixed(2)}€</div>
+    <div class="stat-label">dépensé ce mois-ci</div>
+    <div class="section-title">6 derniers mois</div>
+    ${monthlyBarChart(months)}
+  </div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Répartition par catégorie — ce mois</div>
+    ${catRows.length ? catRows.map(([cat, amount]) => `
+      <div style="margin-bottom:8px">
+        <div class="flex-between" style="margin-bottom:2px"><span>${DEPENSE_CATEGORIES[cat] || DEPENSE_CATEGORIES.autre}</span><span class="muted">${amount.toFixed(2)}€ (${Math.round(amount/totalThisMonth*100) || 0}%)</span></div>
+        <div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden"><div style="background:var(--accent);height:100%;width:${(amount/maxCat)*100}%"></div></div>
+      </div>`).join("") : '<p class="empty">Rien ce mois-ci.</p>'}
+  </div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Plus grosses dépenses du mois</div>
+    ${topDepenses.length ? topDepenses.map((e) => `
+      <div class="row"><span class="pill">${fmtDate(e.date)}</span><span style="flex:1">${e.label}</span><span class="pill">${DEPENSE_CATEGORIES[e.category]||DEPENSE_CATEGORIES.autre}</span><span class="pill">${e.amount.toFixed(2)}€</span></div>
+    `).join("") : '<p class="empty">Rien à afficher.</p>'}
+  </div>`;
+};
+
+/* ---------- INVESTISSEMENTS ---------- */
+const INVEST_TYPES = { action: "📈 Actions/Bourse", pub: "📣 Publicité/Business", immobilier: "🏠 Immobilier", crypto: "🪙 Crypto", autre: "❓ Autre" };
+pages.investissement = () => {
+  const invs = state.investissements;
+  const totalInvesti = invs.reduce((s, i) => s + (i.montantInvesti || 0), 0);
+  const totalActuel = invs.reduce((s, i) => s + (i.valeurActuelle ?? i.montantInvesti ?? 0), 0);
+  const gain = totalActuel - totalInvesti;
+  const gainPct = totalInvesti ? (gain / totalInvesti) * 100 : 0;
+
+  return `
+  <h2>📈 Investissements</h2>
+  <p class="muted">Actions, pub, business, immobilier... suis tes mises et leur évolution.</p>
+  <div class="grid-cards" style="margin-bottom:16px">
+    <div class="card"><div class="stat">${totalInvesti.toFixed(2)}€</div><div class="stat-label">total investi</div></div>
+    <div class="card"><div class="stat">${totalActuel.toFixed(2)}€</div><div class="stat-label">valeur actuelle</div></div>
+    <div class="card"><div class="stat" style="color:${gain < 0 ? 'var(--danger)' : 'var(--accent2)'}">${gain >= 0 ? "+" : ""}${gain.toFixed(2)}€ (${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(1)}%)</div><div class="stat-label">gain / perte</div></div>
+  </div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Ajouter un investissement</div>
+    <div class="form-inline">
+      <input type="text" id="inv-name" placeholder="Nom (ex: actions Apple, campagne pub Facebook)">
+      <select id="inv-type">${Object.entries(INVEST_TYPES).map(([k,l]) => `<option value="${k}">${l}</option>`).join("")}</select>
+      <input type="date" id="inv-date" value="${todayStr()}">
+      <input type="number" step="0.01" id="inv-montant" placeholder="Montant investi (€)">
+      <button class="btn" id="add-investissement">Ajouter</button>
+    </div>
+  </div>
+  ${invs.length ? invs.map((i) => {
+    const actuel = i.valeurActuelle ?? i.montantInvesti ?? 0;
+    const g = actuel - (i.montantInvesti || 0);
+    const gp = i.montantInvesti ? (g / i.montantInvesti) * 100 : 0;
+    return `
+    <div class="card">
+      <div class="flex-between">
+        <strong>${INVEST_TYPES[i.type] || INVEST_TYPES.autre} — ${i.name}</strong>
+        <button class="close-x" data-del-invest="${i.id}">✕</button>
+      </div>
+      <div class="muted" style="margin:4px 0 8px">${fmtDate(i.date)} · investi ${(i.montantInvesti||0).toFixed(2)}€</div>
+      <div class="form-inline" style="align-items:center">
+        <label class="muted" style="flex:1">Valeur actuelle (€) :
+          <input type="number" step="0.01" data-invest-valeur="${i.id}" value="${actuel}">
+        </label>
+        <span class="pill" style="color:${g < 0 ? 'var(--danger)' : 'var(--accent2)'}">${g >= 0 ? "+" : ""}${g.toFixed(2)}€ (${gp >= 0 ? "+" : ""}${gp.toFixed(1)}%)</span>
+      </div>
+    </div>`;
+  }).join("") : '<p class="empty">Aucun investissement — ajoute-en un ci-dessus.</p>'}`;
+};
+
+/* ---------- PRODUITS (historique de prix, alimenté par tes tickets) ---------- */
+function achatsByProduct() {
+  const groups = {};
+  state.achats.forEach((a) => {
+    const key = (a.product || "").trim().toLowerCase();
+    if (!key) return;
+    if (!groups[key]) groups[key] = { name: a.product, entries: [] };
+    groups[key].entries.push(a);
+  });
+  Object.values(groups).forEach((g) => g.entries.sort((a, b) => (b.date || "").localeCompare(a.date || "")));
+  return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+}
+pages.produits = () => {
+  const groups = achatsByProduct();
+  return `
+  <h2>🏷️ Produits — historique de prix</h2>
+  <p class="muted">Suis le prix de ce que t'achètes régulièrement pour repérer les hausses et où c'est le moins cher. Envoie-moi une photo de ticket dans le chat, je t'en fais un CSV à importer.</p>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Ajouter un achat</div>
+    <div class="form-inline">
+      <input type="date" id="achat-date" value="${todayStr()}">
+      <input type="text" id="achat-produit" placeholder="Produit (ex: lait demi-écrémé 1L)">
+      <input type="number" step="0.01" id="achat-prix" placeholder="Prix (€)">
+      <input type="text" id="achat-magasin" placeholder="Magasin (ex: Colruyt)">
+      <button class="btn" id="add-achat">Ajouter</button>
+      <button class="btn secondary" id="export-achats">Exporter CSV</button>
+    </div>
+    <div class="form-inline">
+      <label class="btn secondary" style="cursor:pointer;text-align:center">
+        📥 Importer un CSV (ticket de caisse)
+        <input type="file" id="achats-csv-input" accept=".csv,text/csv" class="hidden">
+      </label>
+      <span id="achats-csv-status" class="muted"></span>
+    </div>
+  </div>
+  ${groups.length ? groups.map((g) => {
+    const prices = g.entries.map((e) => e.price).filter((p) => p != null);
+    const min = Math.min(...prices), max = Math.max(...prices), last = g.entries[0];
+    return `
+    <div class="card">
+      <div class="flex-between">
+        <strong>${g.name}</strong>
+        <span class="pill">dernier : ${last.price != null ? last.price.toFixed(2)+"€" : "?"}${last.store ? ` (${last.store})` : ""}</span>
+      </div>
+      <div class="muted" style="margin:4px 0 8px">min ${min.toFixed(2)}€ · max ${max.toFixed(2)}€ · ${g.entries.length} relevé(s)</div>
+      ${g.entries.slice(0, 6).map((e) => `
+        <div class="row">
+          <span class="pill">${fmtDate(e.date)}</span>
+          <span style="flex:1">${e.store || ""}</span>
+          <span class="pill">${e.price != null ? e.price.toFixed(2)+"€" : "?"}</span>
+          <button class="close-x" data-del-achat="${e.id}">✕</button>
+        </div>`).join("")}
+    </div>`;
+  }).join("") : '<p class="empty">Aucun achat enregistré — ajoute-en un ci-dessus ou importe un CSV de ticket.</p>'}`;
 };
 
 /* ---------- SPORT & SANTE ---------- */
@@ -1125,6 +1407,18 @@ pages.sport = () => {
         <button class="close-x" data-del-mesure="${m.id}">✕</button>
       </div>`).join("") : '<div class="empty">Rien enregistré pour ce type.</div>'}
   </div>`;
+};
+
+/* ---------- SANTÉ (onglet regroupé : Repas + Nutrition + Sport) ---------- */
+let santeTab = "repas";
+const SANTE_TABS = { repas: "🍽️ Repas", nutrition: "🥗 Nutrition", sport: "🏋️ Sport & Santé" };
+pages.sante = () => {
+  const content = santeTab === "nutrition" ? pages.nutrition() : santeTab === "sport" ? pages.sport() : pages.repas();
+  return `
+  <div class="view-selector" style="margin-bottom:14px">
+    ${Object.entries(SANTE_TABS).map(([k,l]) => `<button data-sante-tab="${k}" class="${k===santeTab?"active":""}">${l}</button>`).join("")}
+  </div>
+  ${content}`;
 };
 
 /* ---------- DEVELOPPEMENT PERSONNEL ---------- */
@@ -1269,6 +1563,8 @@ pages.reservation = () => {
 
   return `
   <h2>🔗 Réservation en ligne</h2>
+  <div class="split-view">
+  <div class="split-left">
   <div class="card">
     <div class="section-title" style="margin-top:0">Ton lien à partager</div>
     <div class="form-inline">
@@ -1341,6 +1637,13 @@ pages.reservation = () => {
       <input type="text" id="block-reason" placeholder="raison (ex: barbecue)">
       <button class="btn" id="add-block">Bloquer</button>
     </div>
+  </div>
+  </div>
+  <div class="split-right">
+    <h3 style="margin-top:0">📅 Ton calendrier</h3>
+    <p class="muted" style="margin-top:-8px">Pour voir directement ce que tu as déjà de prévu pendant que tu gères les réservations.</p>
+    ${calendarViewControlsHTML()}
+  </div>
   </div>`;
 };
 
@@ -1380,6 +1683,22 @@ function shiftPeriod(dir) {
   }
 }
 
+function calendarViewControlsHTML() {
+  return `
+  <div class="flex-between" style="margin-bottom:10px">
+    <div class="view-selector">
+      ${VIEW_OPTIONS.map((v) => `<button data-view="${v.key}" class="${v.key === calState.unit ? "active" : ""}">${v.label}</button>`).join("")}
+    </div>
+    <div class="view-nav">
+      <button id="cal-prev">◀</button>
+      <span class="pill">${periodLabel()}</span>
+      <button id="cal-next">▶</button>
+      <button id="cal-today" class="btn-sm">Aujourd'hui</button>
+    </div>
+  </div>
+  <div id="calendar-render"></div>`;
+}
+
 pages.calendrier = () => `
   <h2>📅 Calendrier</h2>
   <div class="card">
@@ -1399,18 +1718,7 @@ pages.calendrier = () => `
       <span id="ics-status" class="muted"></span>
     </div>
   </div>
-  <div class="flex-between" style="margin-bottom:10px">
-    <div class="view-selector">
-      ${VIEW_OPTIONS.map((v) => `<button data-view="${v.key}" class="${v.key === calState.unit ? "active" : ""}">${v.label}</button>`).join("")}
-    </div>
-    <div class="view-nav">
-      <button id="cal-prev">◀</button>
-      <span class="pill">${periodLabel()}</span>
-      <button id="cal-next">▶</button>
-      <button id="cal-today" class="btn-sm">Aujourd'hui</button>
-    </div>
-  </div>
-  <div id="calendar-render"></div>
+  ${calendarViewControlsHTML()}
   `;
 
 function renderCalendarBody() {
@@ -1497,7 +1805,20 @@ function attachHandlers(page) {
 
   // Priorités
   document.querySelectorAll("[data-prio-scope]").forEach((el) => {
-    el.addEventListener("click", () => { prioScope = el.dataset.prioScope; navigate("priorites"); });
+    el.addEventListener("click", () => { prioScope = el.dataset.prioScope; navigate(currentPage); });
+  });
+
+  // Dashboard : cartes cliquables vers les modules
+  document.querySelectorAll("[data-goto]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("input, button, a, select")) return;
+      navigate(el.dataset.goto);
+    });
+  });
+
+  // Santé (sous-onglets Repas / Nutrition / Sport)
+  document.querySelectorAll("[data-sante-tab]").forEach((el) => {
+    el.addEventListener("click", () => { santeTab = el.dataset.santeTab; navigate("sante"); });
   });
 
   // Emploi
@@ -1627,7 +1948,7 @@ function attachHandlers(page) {
     status.textContent = `${newEvents.length} événements importés.`;
   });
 
-  if (page === "calendrier") renderCalendarBody();
+  if (page === "calendrier" || page === "reservation") renderCalendarBody();
 
   // Réservation
   const copyLinkBtn = document.getElementById("copy-link");
@@ -1706,6 +2027,16 @@ function attachHandlers(page) {
       await setDoc(doc(dbFS, "users", uid, "repas", repasDate), { [slot]: { text: cur.text, tags } }, { merge: true });
     });
   });
+  document.querySelectorAll("[data-meal-to-courses]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const slot = el.dataset.mealToCourses;
+      const data = currentSlotData(slot);
+      if (!data.text) return;
+      await addDoc(col("courses"), { name: data.text, price: null, bought: false, addedAt: new Date().toISOString() });
+      el.textContent = "✅ Ajouté";
+      el.disabled = true;
+    });
+  });
   document.querySelectorAll("[data-goal]").forEach((el) => {
     el.addEventListener("change", async () => {
       const val = parseInt(el.value);
@@ -1713,11 +2044,11 @@ function attachHandlers(page) {
     });
   });
   const repasPrev = document.getElementById("repas-prev");
-  if (repasPrev) repasPrev.addEventListener("click", () => { repasDate = Grid.toISODate(Grid.addDays(new Date(repasDate + "T00:00:00"), -1)); navigate("repas"); });
+  if (repasPrev) repasPrev.addEventListener("click", () => { repasDate = Grid.toISODate(Grid.addDays(new Date(repasDate + "T00:00:00"), -1)); navigate("sante"); });
   const repasNext = document.getElementById("repas-next");
-  if (repasNext) repasNext.addEventListener("click", () => { repasDate = Grid.toISODate(Grid.addDays(new Date(repasDate + "T00:00:00"), 1)); navigate("repas"); });
+  if (repasNext) repasNext.addEventListener("click", () => { repasDate = Grid.toISODate(Grid.addDays(new Date(repasDate + "T00:00:00"), 1)); navigate("sante"); });
   const repasToday = document.getElementById("repas-today");
-  if (repasToday) repasToday.addEventListener("click", () => { repasDate = todayStr(); navigate("repas"); });
+  if (repasToday) repasToday.addEventListener("click", () => { repasDate = todayStr(); navigate("sante"); });
 
   // Nutrition
   const saveNutriGoalsBtn = document.getElementById("save-nutrition-goals");
@@ -1745,11 +2076,11 @@ function attachHandlers(page) {
     el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "nutritionLog", el.dataset.delNutri)));
   });
   const nutriPrev = document.getElementById("nutri-prev");
-  if (nutriPrev) nutriPrev.addEventListener("click", () => { nutritionDate = Grid.toISODate(Grid.addDays(new Date(nutritionDate + "T00:00:00"), -1)); navigate("nutrition"); });
+  if (nutriPrev) nutriPrev.addEventListener("click", () => { nutritionDate = Grid.toISODate(Grid.addDays(new Date(nutritionDate + "T00:00:00"), -1)); navigate("sante"); });
   const nutriNext = document.getElementById("nutri-next");
-  if (nutriNext) nutriNext.addEventListener("click", () => { nutritionDate = Grid.toISODate(Grid.addDays(new Date(nutritionDate + "T00:00:00"), 1)); navigate("nutrition"); });
+  if (nutriNext) nutriNext.addEventListener("click", () => { nutritionDate = Grid.toISODate(Grid.addDays(new Date(nutritionDate + "T00:00:00"), 1)); navigate("sante"); });
   const nutriToday = document.getElementById("nutri-today");
-  if (nutriToday) nutriToday.addEventListener("click", () => { nutritionDate = todayStr(); navigate("nutrition"); });
+  if (nutriToday) nutriToday.addEventListener("click", () => { nutritionDate = todayStr(); navigate("sante"); });
 
   // Budget mensuel (charges fixes)
   document.querySelectorAll("[data-charge-amount]").forEach((el) => {
@@ -1777,8 +2108,9 @@ function attachHandlers(page) {
     const name = document.getElementById("objectif-name").value.trim();
     const targetAmount = parseFloat(document.getElementById("objectif-target").value) || 0;
     const savedAmount = parseFloat(document.getElementById("objectif-saved").value) || 0;
+    const horizon = document.getElementById("objectif-horizon").value;
     if (!name || !targetAmount) return;
-    await addDoc(col("objectifs"), { name, targetAmount, savedAmount, createdAt: new Date().toISOString() });
+    await addDoc(col("objectifs"), { name, targetAmount, savedAmount, horizon, createdAt: new Date().toISOString() });
     document.getElementById("objectif-name").value = "";
     document.getElementById("objectif-target").value = "";
     document.getElementById("objectif-saved").value = "";
@@ -1828,14 +2160,121 @@ function attachHandlers(page) {
     const amount = parseFloat(document.getElementById("dep-amount").value);
     const date = document.getElementById("dep-date").value;
     if (isNaN(amount) || !date) return;
-    await addDoc(col("depenses"), { date, amount, label: document.getElementById("dep-label").value.trim() });
+    const category = document.getElementById("dep-category").value;
+    await addDoc(col("depenses"), { date, amount, category, label: document.getElementById("dep-label").value.trim() });
   });
   document.querySelectorAll("[data-del-depense]").forEach((el) => {
     el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "depenses", el.dataset.delDepense)));
   });
   const exportDepensesBtn = document.getElementById("export-depenses");
   if (exportDepensesBtn) exportDepensesBtn.addEventListener("click", () => {
-    csvDownload("depenses-courses.csv", [["Date","Montant","Label"], ...state.depenses.map((d) => [d.date, d.amount, d.label || ""])]);
+    csvDownload("depenses-courses.csv", [["Date","Montant","Label","Catégorie"], ...state.depenses.map((d) => [d.date, d.amount, d.label || "", d.category || "autre"])]);
+  });
+  const depensesCsvInput = document.getElementById("depenses-csv-input");
+  if (depensesCsvInput) depensesCsvInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const status = document.getElementById("depenses-csv-status");
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const parseCsvLine = (line) => {
+      const out = []; let cur = ""; let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if (ch === "," && !inQuotes) { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+      out.push(cur);
+      return out.map((v) => v.replace(/^"|"$/g, "").trim());
+    };
+    let rows = lines.map(parseCsvLine);
+    const looksLikeHeader = /date/i.test(rows[0][0] || "");
+    if (looksLikeHeader) rows = rows.slice(1);
+    const validCats = Object.keys(DEPENSE_CATEGORIES);
+    const newDepenses = rows.map((r) => {
+      const [date, montant, label, categorieRaw] = r;
+      const amount = parseFloat((montant || "0").replace(",", "."));
+      const categorie = validCats.includes((categorieRaw || "").toLowerCase()) ? categorieRaw.toLowerCase() : "autre";
+      return { date, amount, label: label || "", category: categorie };
+    }).filter((d) => d.date && !isNaN(d.amount));
+    if (!newDepenses.length) { status.textContent = "Aucune ligne valide trouvée dans ce CSV."; return; }
+    status.textContent = `Import en cours (${newDepenses.length} dépenses)...`;
+    const batch = writeBatch(dbFS);
+    newDepenses.forEach((d) => batch.set(doc(col("depenses")), d));
+    await batch.commit();
+    status.textContent = `${newDepenses.length} dépenses importées.`;
+  });
+
+  // Investissements
+  const addInvestBtn = document.getElementById("add-investissement");
+  if (addInvestBtn) addInvestBtn.addEventListener("click", async () => {
+    const name = document.getElementById("inv-name").value.trim();
+    const montantInvesti = parseFloat(document.getElementById("inv-montant").value) || 0;
+    if (!name || !montantInvesti) return;
+    await addDoc(col("investissements"), {
+      name, type: document.getElementById("inv-type").value, date: document.getElementById("inv-date").value,
+      montantInvesti, valeurActuelle: montantInvesti,
+    });
+  });
+  document.querySelectorAll("[data-del-invest]").forEach((el) => {
+    el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "investissements", el.dataset.delInvest)));
+  });
+  document.querySelectorAll("[data-invest-valeur]").forEach((el) => {
+    el.addEventListener("change", () => updateDoc(doc(dbFS, "users", uid, "investissements", el.dataset.investValeur), { valeurActuelle: parseFloat(el.value) || 0 }));
+  });
+
+  // Produits (historique de prix)
+  const addAchatBtn = document.getElementById("add-achat");
+  if (addAchatBtn) addAchatBtn.addEventListener("click", async () => {
+    const date = document.getElementById("achat-date").value;
+    const product = document.getElementById("achat-produit").value.trim();
+    const price = parseFloat(document.getElementById("achat-prix").value);
+    const store = document.getElementById("achat-magasin").value.trim();
+    if (!date || !product) return;
+    await addDoc(col("achats"), { date, product, price: isNaN(price) ? null : price, store });
+    document.getElementById("achat-produit").value = "";
+    document.getElementById("achat-prix").value = "";
+    document.getElementById("achat-magasin").value = "";
+  });
+  document.querySelectorAll("[data-del-achat]").forEach((el) => {
+    el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "achats", el.dataset.delAchat)));
+  });
+  const exportAchatsBtn = document.getElementById("export-achats");
+  if (exportAchatsBtn) exportAchatsBtn.addEventListener("click", () => {
+    csvDownload("produits-prix.csv", [["Date","Produit","Prix","Magasin"], ...state.achats.map((a) => [a.date, a.product, a.price ?? "", a.store || ""])]);
+  });
+  const achatsCsvInput = document.getElementById("achats-csv-input");
+  if (achatsCsvInput) achatsCsvInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const status = document.getElementById("achats-csv-status");
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const parseCsvLine = (line) => {
+      const out = []; let cur = ""; let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if (ch === "," && !inQuotes) { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+      out.push(cur);
+      return out.map((v) => v.replace(/^"|"$/g, "").trim());
+    };
+    let rows = lines.map(parseCsvLine);
+    if (/date/i.test(rows[0][0] || "")) rows = rows.slice(1);
+    const newAchats = rows.map((r) => {
+      const [date, product, prix, store] = r;
+      const price = parseFloat((prix || "").replace(",", "."));
+      return { date, product: (product || "").trim(), price: isNaN(price) ? null : price, store: (store || "").trim() };
+    }).filter((a) => a.date && a.product);
+    if (!newAchats.length) { status.textContent = "Aucune ligne valide trouvée dans ce CSV."; return; }
+    status.textContent = `Import en cours (${newAchats.length} achats)...`;
+    const batch = writeBatch(dbFS);
+    newAchats.forEach((a) => batch.set(doc(col("achats")), a));
+    await batch.commit();
+    status.textContent = `${newAchats.length} achats importés.`;
   });
 
   // Sport & Santé
@@ -1848,7 +2287,7 @@ function attachHandlers(page) {
     await addDoc(col("mesures"), { type, date, value, label: document.getElementById("mesure-label").value.trim() });
   });
   document.querySelectorAll("[data-mesure-view]").forEach((el) => {
-    el.addEventListener("click", () => { mesureFilter = el.dataset.mesureView; navigate("sport"); });
+    el.addEventListener("click", () => { mesureFilter = el.dataset.mesureView; navigate("sante"); });
   });
   document.querySelectorAll("[data-del-mesure]").forEach((el) => {
     el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "mesures", el.dataset.delMesure)));

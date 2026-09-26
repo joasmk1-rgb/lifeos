@@ -12,9 +12,11 @@ nav button{display:block;width:100%;text-align:left;background:none;border:none;
   padding:10px 12px;border-radius:8px;font-size:14px;cursor:pointer;margin-bottom:4px}
 nav button:hover{background:var(--card);color:var(--text)}
 nav button.active{background:var(--accent);color:#fff}
-main{flex:1;padding:28px 32px;max-width:1100px}
+main{flex:1;padding:28px 32px;max-width:1300px}
 h2{margin-top:0;font-size:22px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card.clickable{cursor:pointer;transition:border-color .15s,transform .15s}
+.card.clickable:hover{border-color:var(--accent);transform:translateY(-1px)}
 .grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 .row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
 .row:last-child{border-bottom:none}
@@ -91,6 +93,10 @@ th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase}
 .mini-day.today .mini-day-dot{background:#fff}
 
 .hidden{display:none !important}
+.split-view{display:flex;gap:20px;align-items:flex-start}
+.split-view .split-left{flex:1;min-width:0}
+.split-view .split-right{flex:1;min-width:0;position:sticky;top:20px}
+@media (max-width:900px){.split-view{flex-direction:column}.split-view .split-right{position:static}}
 .priority-matrix{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .priority-quadrant{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;min-height:140px}
 .priority-quadrant h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.03em}
