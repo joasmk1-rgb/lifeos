@@ -32,7 +32,7 @@ const state = {
   bookingRules: [], blockedSlots: [], bookingRequests: [],
   loisirsEvents: [], actus: [], counterLog: {}, devPerso: [], mesures: [], repas: [],
   foodGoals: [], courses: [], depenses: [], budgetSettings: {},
-  nutritionGoals: {}, nutritionLog: [], budgetCharges: {},
+  nutritionGoals: {}, nutritionLog: [], budgetCharges: {}, objectifs: [],
 };
 let unsubscribers = [];
 
@@ -140,6 +140,7 @@ function attachListeners() {
   bind("foodGoals", "foodGoals");
   bind("courses", "courses", (a, b) => (a.addedAt || "").localeCompare(b.addedAt || ""));
   bind("depenses", "depenses", (a, b) => (b.date || "").localeCompare(a.date || ""));
+  bind("objectifs", "objectifs", (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
 
   const unsubBudget = onSnapshot(doc(dbFS, "users", uid, "settings", "budget"), (d) => {
     state.budgetSettings = d.exists() ? d.data() : {};
@@ -218,63 +219,87 @@ function navigate(page, silent) {
   attachHandlers(page);
 }
 
-/* ---------- PRIORITÉS (matrice urgence / impact) ---------- */
-function buildPriorityItems() {
+/* ---------- PRIORITÉS (matrice urgence / impact, selon la portée jour/semaine/mois) ---------- */
+let prioScope = "semaine";
+function buildPriorityItems(scope) {
   const items = [];
   const today = new Date(); today.setHours(0,0,0,0);
   const daysFrom = (d) => Math.round((d - today) / 86400000);
+  const horizon = scope === "jour" ? 1 : scope === "semaine" ? 7 : 31;
 
-  // Routines périodiques en retard/dues
-  state.habits.filter((h) => (h.type || "daily") === "periodic").forEach((h) => {
-    const status = periodicStatus(h);
-    if (status.days === null || status.days <= 3) {
-      items.push({
-        title: `${h.icon} ${h.name}`, source: "Routine", urgency: status.late ? 90 : 60, impact: 55,
-        detail: status.label,
-      });
+  // Vue Jour : routines quotidiennes pas encore faites aujourd'hui
+  if (scope === "jour") {
+    const t = todayStr();
+    const doneToday = state.habitLog[t] || {};
+    state.habits.filter((h) => (h.type || "daily") === "daily" && !doneToday[h.id]).forEach((h) => {
+      items.push({ title: `${h.icon} ${h.name}`, source: "Routine", urgency: 65, impact: 45, detail: "à faire aujourd'hui" });
+    });
+  }
+
+  // Routines périodiques / compteurs, filtrées selon leur portée déclarée (hebdo/mensuel/annuel)
+  state.habits.filter((h) => ["periodic", "counter"].includes(h.type)).forEach((h) => {
+    const hScope = h.scope || (h.type === "counter" ? "mensuel" : "hebdo");
+    if (scope === "jour") {
+      if (!(h.type === "periodic" && periodicStatus(h).late)) return;
+    }
+    if (scope === "semaine" && hScope === "annuel") return;
+    if (scope === "mois" && hScope === "hebdo") return;
+    if (h.type === "periodic") {
+      const status = periodicStatus(h);
+      if (!status.late && (status.days === null || status.days > horizon)) return;
+      items.push({ title: `${h.icon} ${h.name}`, source: "Routine", urgency: status.late ? 90 : 60, impact: 55, detail: status.label });
+    } else {
+      const val = counterValue(h.id), target = h.target || 1;
+      if (val < target) {
+        const now = new Date();
+        const daysLeftInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+        items.push({ title: `${h.icon} ${h.name}`, source: "Routine", urgency: daysLeftInMonth <= 7 ? 80 : 50, impact: 60, detail: `${val}/${target} ce mois` });
+      }
     }
   });
 
-  // Candidatures à relancer / entretiens
+  // Candidatures à relancer / entretiens (toujours pertinent)
   state.jobs.forEach((j) => {
     if (j.status === "relance") items.push({ title: `Relancer ${j.entreprise}`, source: "Emploi", urgency: 75, impact: 80, detail: j.poste });
     if (j.status === "entretien") items.push({ title: `Entretien — ${j.entreprise}`, source: "Emploi", urgency: 85, impact: 90, detail: j.poste });
   });
 
-  // Budget dépassé
-  const budget = state.budgetSettings.monthlyLimit || 0;
-  if (budget) {
-    const monthKey = currentMonthKey();
-    const sumItems = state.courses.filter((c) => c.bought && c.price != null).reduce((s,c)=>s+c.price,0);
-    const sumDep = state.depenses.filter((d)=>(d.date||"").startsWith(monthKey)).reduce((s,d)=>s+d.amount,0);
-    const remaining = budget - (sumItems + sumDep);
-    if (remaining < 0) items.push({ title: "Budget courses dépassé", source: "Budget", urgency: 80, impact: 70, detail: `${remaining.toFixed(2)}€` });
+  // Budget dépassé (pas pertinent à l'échelle du jour)
+  if (scope !== "jour") {
+    const budget = state.budgetSettings.monthlyLimit || 0;
+    if (budget) {
+      const monthKey = currentMonthKey();
+      const sumItems = state.courses.filter((c) => c.bought && c.price != null).reduce((s, c) => s + c.price, 0);
+      const sumDep = state.depenses.filter((d) => (d.date || "").startsWith(monthKey)).reduce((s, d) => s + d.amount, 0);
+      const remaining = budget - (sumItems + sumDep);
+      if (remaining < 0) items.push({ title: "Budget courses dépassé", source: "Budget", urgency: 80, impact: 70, detail: `${remaining.toFixed(2)}€` });
+    }
   }
 
-  // Demandes de réservation en attente
+  // Demandes de réservation en attente (toujours)
   state.bookingRequests.filter((r) => r.status === "pending").forEach((r) => {
     items.push({ title: `Réponse à ${r.name}`, source: "Réservation", urgency: 70, impact: 50, detail: fmtDate(r.date) });
   });
 
-  // Événements calendrier proches
+  // Événements calendrier dans l'horizon de la vue
   state.events.forEach((e) => {
     const d = daysFrom(new Date(e.date + "T00:00:00"));
-    if (d >= 0 && d <= 3) {
-      items.push({ title: e.title, source: "Calendrier", urgency: d === 0 ? 95 : 80 - d * 15, impact: 65, detail: fmtDate(e.date) });
+    if (d >= 0 && d <= horizon) {
+      items.push({ title: e.title, source: "Calendrier", urgency: d === 0 ? 95 : Math.max(30, 80 - d * 10), impact: 65, detail: fmtDate(e.date) });
     }
   });
 
-  // Actus proches (anniversaires etc.)
+  // Actus dans l'horizon de la vue
   actusUpcoming().forEach((a) => {
     const d = daysFrom(a._next);
-    if (d <= 3) items.push({ title: `${a.person} — ${a.title}`, source: "Actus", urgency: 60 - d * 10, impact: 35, detail: `dans ${d}j` });
+    if (d >= 0 && d <= horizon) items.push({ title: `${a.person} — ${a.title}`, source: "Actus", urgency: Math.max(20, 60 - d * 5), impact: 35, detail: `dans ${d}j` });
   });
 
   return items;
 }
 
 pages.priorites = () => {
-  const items = buildPriorityItems();
+  const items = buildPriorityItems(prioScope);
   const q = { ui: [], i: [], u: [], n: [] };
   items.forEach((it) => {
     const urgent = it.urgency >= 55, important = it.impact >= 55;
@@ -293,9 +318,14 @@ pages.priorites = () => {
       ${it.detail ? `<div class="muted" style="font-size:11px">${it.detail}</div>` : ""}
     </div>`).join("") : '<p class="empty" style="padding:0">Rien ici.</p>';
 
+  const SCOPE_LABELS = { jour: "Jour", semaine: "Semaine", mois: "Mois" };
+
   return `
   <h2>🎯 Priorités</h2>
-  <p class="muted">Vue automatique sur tous les modules — classée par urgence (délai) et impact (importance).</p>
+  <p class="muted">Vue automatique sur tous les modules — classée par urgence (délai) et impact (importance). Change de vue pour changer l'horizon pris en compte.</p>
+  <div class="view-selector">
+    ${Object.entries(SCOPE_LABELS).map(([k, l]) => `<button data-prio-scope="${k}" class="${k === prioScope ? "active" : ""}">${l}</button>`).join("")}
+  </div>
   <div class="priority-matrix">
     <div class="priority-quadrant q-urgent-important"><h4>🔥 Urgent & important — à faire maintenant</h4>${renderCards(q.ui)}</div>
     <div class="priority-quadrant q-important"><h4>⭐ Important, pas urgent — à planifier</h4>${renderCards(q.i)}</div>
@@ -417,10 +447,15 @@ pages.habitudes = () => {
         <option value="counter">Compteur mensuel (objectif par mois)</option>
       </select>
       <input type="number" id="new-habit-param" placeholder="intervalle (j) ou objectif" style="max-width:160px" class="hidden">
+      <select id="new-habit-scope" class="hidden" title="Portée : à quelle échelle cette tâche compte-t-elle dans les Priorités ?">
+        <option value="hebdo">Portée : hebdomadaire (ex: lessive, courses)</option>
+        <option value="mensuel">Portée : mensuelle (ex: bilan, prospections)</option>
+        <option value="annuel">Portée : annuelle (ex: bilan annuel)</option>
+      </select>
       <input type="time" id="new-habit-alarm" title="Alarme (optionnel, seulement pour Quotidien, tant que le Life OS est ouvert dans un onglet)">
       <button class="btn" id="add-habit">Ajouter</button>
     </div>
-    <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone.</p>
+    <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone. La "portée" détermine dans quelle vue (Jour/Semaine/Mois) de 🎯 Priorités la tâche apparaîtra.</p>
   </div>`;
 };
 
@@ -842,10 +877,20 @@ const CHARGE_SECTIONS = { primaire: "Dépenses primaires", secondaire: "Dépense
 const FREQ_DIVISOR = { mensuel: 1, trimestriel: 3, annuel: 12 };
 
 function monthlyEquivalent(amount, freq) { return (amount || 0) / (FREQ_DIVISOR[freq] || 1); }
+function totalChargesMonthly(values) {
+  return CHARGE_CATEGORIES.reduce((s, c) => s + monthlyEquivalent((values[c.id] || {}).amount, (values[c.id] || {}).freq || c.freq), 0);
+}
+function capaciteEpargneMensuelle() {
+  const values = state.budgetCharges || {};
+  const revenu = values._revenu || 0;
+  return revenu - totalChargesMonthly(values);
+}
 
 pages.budgetmensuel = () => {
   const values = state.budgetCharges || {};
-  const allMonthly = CHARGE_CATEGORIES.reduce((s, c) => s + monthlyEquivalent((values[c.id] || {}).amount, (values[c.id] || {}).freq || c.freq), 0);
+  const allMonthly = totalChargesMonthly(values);
+  const revenu = values._revenu || 0;
+  const capacite = revenu - allMonthly;
 
   const renderSection = (sectionKey) => {
     const cats = CHARGE_CATEGORIES.filter((c) => c.section === sectionKey);
@@ -879,10 +924,75 @@ pages.budgetmensuel = () => {
   return `
   <h2>📋 Budget mensuel — charges fixes</h2>
   <p class="muted">Basé sur le modèle CPAS que tu m'as donné — remplis seulement ce qui te concerne, laisse à 0 le reste.</p>
-  <div class="card"><div class="stat">${allMonthly.toFixed(2)}€ / mois</div><div class="stat-label">total toutes charges fixes confondues</div></div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Revenu</div>
+    <div class="form-inline">
+      <input type="number" step="0.01" id="revenu-mensuel" value="${revenu || ""}" placeholder="Revenu mensuel net (€)">
+    </div>
+  </div>
+  <div class="grid-cards" style="margin-bottom:16px">
+    <div class="card"><div class="stat">${allMonthly.toFixed(2)}€ / mois</div><div class="stat-label">total toutes charges fixes confondues</div></div>
+    <div class="card"><div class="stat" style="color:${capacite < 0 ? 'var(--danger)' : 'var(--accent2)'}">${capacite.toFixed(2)}€ / mois</div><div class="stat-label">capacité d'épargne (revenu − charges) — utilisée dans 💰 Objectifs</div></div>
+  </div>
   ${renderSection("primaire")}
   ${renderSection("secondaire")}
   ${renderSection("choixdevie")}`;
+};
+
+/* ---------- OBJECTIFS FINANCIERS (épargne long terme + simulateur) ---------- */
+function projectionHTML(remaining, capacite) {
+  if (remaining <= 0) return `<span style="color:var(--accent2)">🎉 Objectif atteint !</span>`;
+  if (capacite <= 0) return `<span class="muted">Capacité d'épargne nulle ou négative — impossible d'estimer une date.</span>`;
+  const months = Math.ceil(remaining / capacite);
+  const d = new Date(); d.setMonth(d.getMonth() + months);
+  const dateLabel = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return `Atteignable dans <strong>${months} mois</strong> (vers <strong>${dateLabel}</strong>) à ${capacite.toFixed(2)}€/mois`;
+}
+
+pages.objectifs = () => {
+  const capacite = capaciteEpargneMensuelle();
+  return `
+  <h2>💰 Objectifs financiers</h2>
+  <p class="muted">Maison, voiture, voyage... pose un objectif, on simule quand c'est atteignable selon ta capacité d'épargne.</p>
+  <div class="card">
+    <div class="stat" style="color:${capacite < 0 ? 'var(--danger)' : 'var(--accent2)'}">${capacite.toFixed(2)}€ / mois</div>
+    <div class="stat-label">capacité d'épargne actuelle (revenu − charges, réglable dans 📋 Budget mensuel)</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Nouvel objectif</div>
+    <div class="form-inline">
+      <input type="text" id="objectif-name" placeholder="Nom (ex: apport maison, voiture, voyage Japon)">
+      <input type="number" step="0.01" id="objectif-target" placeholder="Montant cible (€)">
+      <input type="number" step="0.01" id="objectif-saved" placeholder="Déjà épargné (€, optionnel)">
+      <button class="btn" id="add-objectif">Ajouter</button>
+    </div>
+  </div>
+
+  ${state.objectifs.length ? state.objectifs.map((o) => {
+    const remaining = Math.max(0, (o.targetAmount || 0) - (o.savedAmount || 0));
+    const pct = o.targetAmount ? Math.min(100, Math.round(((o.savedAmount || 0) / o.targetAmount) * 100)) : 0;
+    return `
+    <div class="card">
+      <div class="flex-between">
+        <strong>${o.name}</strong>
+        <button class="close-x" data-del-objectif="${o.id}">✕</button>
+      </div>
+      <div class="muted" style="margin:4px 0 8px">${(o.savedAmount || 0).toFixed(2)}€ / ${(o.targetAmount || 0).toFixed(2)}€ (${pct}%)</div>
+      <div class="form-inline" style="margin-bottom:8px">
+        <label class="muted" style="flex:1">Déjà épargné :
+          <input type="number" step="0.01" data-objectif-saved="${o.id}" value="${o.savedAmount || 0}">
+        </label>
+      </div>
+      <div class="section-title" style="margin:10px 0 6px">Simulateur</div>
+      <div class="form-inline" style="align-items:center">
+        <label class="muted" style="flex:1">Épargne mensuelle simulée (€) :
+          <input type="number" step="10" data-sim-capacite="${o.id}" data-remaining="${remaining}" value="${Math.max(0, capacite).toFixed(2)}">
+        </label>
+      </div>
+      <p data-sim-result="${o.id}" style="margin-top:6px">${projectionHTML(remaining, Math.max(0, capacite))}</p>
+    </div>`;
+  }).join("") : '<p class="empty">Aucun objectif — ajoute-en un ci-dessus.</p>'}`;
 };
 
 /* ---------- COURSES & BUDGET ---------- */
@@ -1343,10 +1453,15 @@ function attachHandlers(page) {
   });
   const typeSelect = document.getElementById("new-habit-type");
   const paramInput = document.getElementById("new-habit-param");
+  const scopeSelect = document.getElementById("new-habit-scope");
   if (typeSelect) {
     const syncParam = () => {
-      if (typeSelect.value === "daily") { paramInput.classList.add("hidden"); }
-      else { paramInput.classList.remove("hidden"); paramInput.placeholder = typeSelect.value === "counter" ? "objectif par mois (ex: 20)" : "tous les combien de jours (ex: 42)"; }
+      if (typeSelect.value === "daily") { paramInput.classList.add("hidden"); if (scopeSelect) scopeSelect.classList.add("hidden"); }
+      else {
+        paramInput.classList.remove("hidden");
+        paramInput.placeholder = typeSelect.value === "counter" ? "objectif par mois (ex: 20)" : "tous les combien de jours (ex: 42)";
+        if (scopeSelect) { scopeSelect.classList.remove("hidden"); scopeSelect.value = typeSelect.value === "counter" ? "mensuel" : "hebdo"; }
+      }
     };
     typeSelect.addEventListener("change", syncParam);
     syncParam();
@@ -1361,6 +1476,7 @@ function attachHandlers(page) {
     const paramVal = parseInt(paramInput.value) || 0;
     if (type === "counter") data.target = paramVal || 1;
     if (type === "periodic") { data.intervalDays = paramVal || 30; data.lastDone = null; }
+    if (type !== "daily" && scopeSelect) data.scope = scopeSelect.value;
     if (type === "daily") {
       const alarmVal = document.getElementById("new-habit-alarm").value;
       if (alarmVal) data.alarmTime = alarmVal;
@@ -1377,6 +1493,11 @@ function attachHandlers(page) {
   });
   document.querySelectorAll("[data-periodic-done]").forEach((el) => {
     el.addEventListener("click", () => updateDoc(doc(dbFS, "users", uid, "habits", el.dataset.periodicDone), { lastDone: todayStr() }));
+  });
+
+  // Priorités
+  document.querySelectorAll("[data-prio-scope]").forEach((el) => {
+    el.addEventListener("click", () => { prioScope = el.dataset.prioScope; navigate("priorites"); });
   });
 
   // Emploi
@@ -1643,6 +1764,39 @@ function attachHandlers(page) {
       const id = el.dataset.chargeFreq;
       const cur = state.budgetCharges[id] || {};
       await setDoc(doc(dbFS, "users", uid, "settings", "budgetCharges"), { [id]: { ...cur, freq: el.value } }, { merge: true });
+    });
+  });
+  const revenuInput = document.getElementById("revenu-mensuel");
+  if (revenuInput) revenuInput.addEventListener("change", async () => {
+    await setDoc(doc(dbFS, "users", uid, "settings", "budgetCharges"), { _revenu: parseFloat(revenuInput.value) || 0 }, { merge: true });
+  });
+
+  // Objectifs financiers
+  const addObjectifBtn = document.getElementById("add-objectif");
+  if (addObjectifBtn) addObjectifBtn.addEventListener("click", async () => {
+    const name = document.getElementById("objectif-name").value.trim();
+    const targetAmount = parseFloat(document.getElementById("objectif-target").value) || 0;
+    const savedAmount = parseFloat(document.getElementById("objectif-saved").value) || 0;
+    if (!name || !targetAmount) return;
+    await addDoc(col("objectifs"), { name, targetAmount, savedAmount, createdAt: new Date().toISOString() });
+    document.getElementById("objectif-name").value = "";
+    document.getElementById("objectif-target").value = "";
+    document.getElementById("objectif-saved").value = "";
+  });
+  document.querySelectorAll("[data-del-objectif]").forEach((el) => {
+    el.addEventListener("click", () => deleteDoc(doc(dbFS, "users", uid, "objectifs", el.dataset.delObjectif)));
+  });
+  document.querySelectorAll("[data-objectif-saved]").forEach((el) => {
+    el.addEventListener("change", () => updateDoc(doc(dbFS, "users", uid, "objectifs", el.dataset.objectifSaved), { savedAmount: parseFloat(el.value) || 0 }));
+  });
+  document.querySelectorAll("[data-sim-capacite]").forEach((el) => {
+    el.addEventListener("input", () => {
+      const goalId = el.dataset.simCapacite;
+      const resultEl = document.querySelector(`[data-sim-result="${goalId}"]`);
+      if (!resultEl) return;
+      const remaining = parseFloat(el.dataset.remaining) || 0;
+      const capacite = parseFloat(el.value) || 0;
+      resultEl.innerHTML = projectionHTML(remaining, capacite);
     });
   });
 
