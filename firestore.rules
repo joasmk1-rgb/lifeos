@@ -7,5 +7,60 @@ service cloud.firestore {
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // ===================== BOOKING PUBLIC =====================
+    // Sous-arbre lisible publiquement (sans connexion) pour la page de
+    // réservation partagée par lien. uid = ton identifiant Firebase (pas un
+    // secret, ça sert juste de "slug" dans le lien ?u=...).
+
+    // Règles récurrentes de dispo (ex: "mardi/jeudi 14h-17h") — visibles par
+    // tout le monde, modifiables seulement par toi.
+    match /bookingPublic/{uid}/availabilityRules/{ruleId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Indisponibilités ponctuelles (avec raison) — visibles par tout le
+    // monde (pour bloquer le lien), modifiables seulement par toi.
+    match /bookingPublic/{uid}/blockedSlots/{blockId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Un doc par créneau déjà pris (id déterministe "date_heure"), pour
+    // empêcher deux personnes de réserver le même créneau. N'importe qui
+    // peut EN CRÉER un nouveau (réserver), mais seulement s'il n'existe pas
+    // déjà ; seul toi peux le modifier/supprimer (accepter/refuser libère).
+    match /bookingPublic/{uid}/slotsTaken/{slotId} {
+      allow read: if true;
+      allow create: if !exists(/databases/$(database)/documents/bookingPublic/$(uid)/slotsTaken/$(slotId));
+      allow update, delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Détails de la demande (nom/email/motif) — n'importe qui peut en créer
+    // une (réserver), mais seul toi peux les lire/modifier/supprimer : les
+    // infos des visiteurs restent privées, pas visibles par les autres.
+    match /bookingPublic/{uid}/requests/{reqId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ===================== LOISIRS PARTAGÉS =====================
+    // Calendrier sport/voyages collaboratif : lisible et alimentable par
+    // n'importe qui ayant le lien (tes amis, sans compte), mais seul toi
+    // peux modifier/supprimer une entrée (évite qu'un ami efface ce qu'un
+    // autre a ajouté par erreur).
+    match /loisirs/{uid}/events/{eventId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ===================== ACTUS (privé) =====================
+    // Événements qui concernent d'autres personnes (anniversaire,
+    // déménagement...) — purement informatif, reste privé comme le reste.
+    match /users/{uid}/actus/{actuId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

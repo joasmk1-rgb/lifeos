@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Réserver un créneau — Joas</title>
+<style>
+  :root{--bg:#0f1115;--card:#1c2029;--border:#2a2f3a;--text:#e8eaf0;--muted:#9aa1b0;--accent:#6c8eff;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);padding:24px 16px;max-width:640px;margin-left:auto;margin-right:auto}
+  h1{color:var(--accent);font-size:22px}
+  .hint{color:var(--muted);font-size:14px}
+  .err{color:#f26d6d}
+  .day-block{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+  .day-title{font-weight:600;margin-bottom:8px;text-transform:capitalize}
+  .slot-row{display:flex;flex-wrap:wrap;gap:8px}
+  .slot-btn{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:14px}
+  .slot-btn:hover{background:var(--accent);border-color:var(--accent)}
+  #booking-form-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-top:20px}
+  input,textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;font-size:14px;margin-bottom:10px;font-family:inherit}
+  textarea{min-height:60px;resize:vertical}
+  .btn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:14px;margin-right:8px}
+  .btn.secondary{background:var(--bg);border:1px solid var(--border);color:var(--text)}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+  <h1>📅 Réserver un créneau avec Joas</h1>
+  <p class="hint">Choisis un créneau ci-dessous, remplis tes infos, et Joas validera ta demande.</p>
+  <div id="booking-root"></div>
+  <script type="module" src="booking.js"></script>
+</body>
+</html>
