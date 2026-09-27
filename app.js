@@ -510,17 +510,143 @@ function renderHabitRow(h) {
     </div>`;
 }
 
+const MOMENT_LABELS = { matin: "🌅 Matin", midi: "☀️ Midi", soir: "🌙 Soir" };
+function momentLabelOf(h) {
+  if (h.moment === "custom" && h.momentLabel) return `✏️ ${h.momentLabel}`;
+  if (h.moment && MOMENT_LABELS[h.moment]) return MOMENT_LABELS[h.moment];
+  return "🗂️ Sans moment précis";
+}
+function renderHabitsGrouped() {
+  const groups = {};
+  const order = [];
+  state.habits.forEach((h) => {
+    const label = momentLabelOf(h);
+    if (!groups[label]) { groups[label] = []; order.push(label); }
+    groups[label].push(h);
+  });
+  const priorityOrder = ["🌅 Matin", "☀️ Midi", "🌙 Soir"];
+  order.sort((a, b) => {
+    const ia = priorityOrder.indexOf(a), ib = priorityOrder.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    if (a === "🗂️ Sans moment précis") return 1;
+    if (b === "🗂️ Sans moment précis") return -1;
+    return a.localeCompare(b);
+  });
+  if (!order.length) return '<div class="empty">Aucune routine — ajoute la première ci-dessous.</div>';
+  return order.map((label) => `
+    <div class="section-title" style="margin-top:14px">${label}</div>
+    <div class="card" style="margin-bottom:10px">${groups[label].map(renderHabitRow).join("")}</div>
+  `).join("");
+}
+
+/* ---------- MODÈLES DE ROUTINE (prêts à charger) ---------- */
+const PRAYER_SETS = {
+  islam: [
+    { name: "Fajr", icon: "🕌", time: "06:00" },
+    { name: "Dhuhr", icon: "🕌", time: "13:00" },
+    { name: "Asr", icon: "🕌", time: "16:30" },
+    { name: "Maghrib", icon: "🕌", time: "18:30" },
+    { name: "Isha", icon: "🕌", time: "21:00" },
+  ],
+  chretien: [
+    { name: "Temps de prière du matin", icon: "🙏", time: "07:00" },
+    { name: "Temps de prière du soir", icon: "🙏", time: "21:00" },
+  ],
+  aucune: [],
+};
+const ROUTINE_MODES = {
+  etudiant: {
+    label: "🎓 Étudiant",
+    blocks: [
+      { name: "Réveil + hygiène", icon: "🛌", time: "06:30" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Cours / trajet", icon: "🎓", time: "08:30" },
+      { name: "Déjeuner", icon: "🍽️", time: "12:00" },
+      { name: "Étude / devoirs", icon: "📚", time: "13:30" },
+      { name: "Sport ou marche", icon: "🏃", time: "16:30" },
+      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Révisions du soir", icon: "📖", time: "19:00" },
+      { name: "Planifier demain", icon: "🗒️", time: "22:00" },
+      { name: "Coucher", icon: "🌙", time: "23:00" },
+    ],
+  },
+  travailpleintemps: {
+    label: "💼 Travail temps plein",
+    blocks: [
+      { name: "Réveil + étirements", icon: "🛌", time: "06:00" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Trajet", icon: "🚗", time: "07:45" },
+      { name: "Travail (matin)", icon: "💼", time: "08:30" },
+      { name: "Déjeuner", icon: "🍽️", time: "12:00" },
+      { name: "Travail (après-midi)", icon: "💼", time: "13:00" },
+      { name: "Trajet retour", icon: "🚗", time: "17:00" },
+      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Temps perso / sport / famille", icon: "🌿", time: "19:30" },
+      { name: "Décompression sans écran", icon: "📴", time: "21:15" },
+      { name: "Coucher", icon: "🌙", time: "22:30" },
+    ],
+  },
+  travailpartiel: {
+    label: "🕒 Travail temps partiel + cours du soir",
+    blocks: [
+      { name: "Réveil", icon: "🛌", time: "07:00" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:15" },
+      { name: "Travail (mi-temps)", icon: "💼", time: "08:30" },
+      { name: "Déjeuner rapide", icon: "🍽️", time: "12:30" },
+      { name: "Admin / courses / temps libre", icon: "🗂️", time: "13:15" },
+      { name: "Pause ou courte sieste", icon: "😴", time: "15:00" },
+      { name: "Révisions avant cours", icon: "📚", time: "15:30" },
+      { name: "Trajet vers cours du soir", icon: "🚗", time: "17:00" },
+      { name: "Cours du soir", icon: "🎓", time: "18:00" },
+      { name: "Dîner léger", icon: "🍽️", time: "21:30" },
+      { name: "Coucher", icon: "🌙", time: "23:00" },
+    ],
+  },
+  athlete: {
+    label: "🏅 Athlète",
+    blocks: [
+      { name: "Réveil", icon: "🛌", time: "05:30" },
+      { name: "Petit-déjeuner costaud", icon: "🥐", time: "06:00" },
+      { name: "Entraînement matinal", icon: "🏋️", time: "06:30" },
+      { name: "Douche + cours/travail", icon: "🚿", time: "08:30" },
+      { name: "Déjeuner riche", icon: "🍽️", time: "12:00" },
+      { name: "Cours/travail (après-midi)", icon: "📚", time: "13:00" },
+      { name: "2e séance ou récup active", icon: "🏃", time: "17:00" },
+      { name: "Dîner", icon: "🍽️", time: "19:00" },
+      { name: "Étirements / mobilité", icon: "🧘", time: "20:00" },
+      { name: "Coucher (priorité récup)", icon: "🌙", time: "22:00" },
+    ],
+  },
+  blocus: {
+    label: "🔥 Blocus / étude intensive",
+    blocks: [
+      { name: "Réveil (pas plus tard !)", icon: "🛌", time: "06:30" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Bloc d'étude 1 (le plus dur)", icon: "📚", time: "07:30" },
+      { name: "Bloc d'étude 2", icon: "📚", time: "10:15" },
+      { name: "Déjeuner — vraie coupure", icon: "🍽️", time: "12:00" },
+      { name: "Bloc d'étude 3", icon: "📚", time: "13:30" },
+      { name: "Pause active (marche, sans écran)", icon: "🚶", time: "15:30" },
+      { name: "Bloc d'étude 4", icon: "📚", time: "16:00" },
+      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Relecture / fiches (léger)", icon: "📖", time: "19:30" },
+      { name: "Coupure totale sans écran", icon: "📴", time: "21:15" },
+      { name: "Coucher", icon: "🌙", time: "22:30" },
+    ],
+  },
+};
+
 pages.habitudes = () => {
   const t = todayStr();
   return `
   <h2>✅ Routine & Habitudes</h2>
   <div class="split-view">
   <div class="split-left">
+  ${renderHabitsGrouped()}
   <div class="card">
-    <div class="flex-between" style="margin-bottom:10px"><strong>${fmtDate(t)}</strong></div>
-    ${state.habits.map(renderHabitRow).join("") || '<div class="empty">Aucune routine — ajoute la première ci-dessous.</div>'}
-  </div>
-  <div class="card">
+    <div class="section-title" style="margin-top:0">Nouvelle routine</div>
     <div class="form-inline">
       <input type="text" id="new-habit-icon" placeholder="emoji" style="max-width:80px">
       <input type="text" id="new-habit-name" placeholder="nom (ex: coiffeur, boire assez, prospections)">
@@ -536,9 +662,32 @@ pages.habitudes = () => {
         <option value="annuel">Portée : annuelle (ex: bilan annuel)</option>
       </select>
       <input type="time" id="new-habit-alarm" title="Alarme (optionnel, seulement pour Quotidien, tant que le Life OS est ouvert dans un onglet)">
+    </div>
+    <div class="form-inline">
+      <select id="new-habit-moment" title="Moment de la journée : pour regrouper tes routines de façon claire">
+        <option value="matin">🌅 Routine du matin</option>
+        <option value="midi">☀️ Routine du midi</option>
+        <option value="soir">🌙 Routine du soir</option>
+        <option value="custom">✏️ Moment personnalisé...</option>
+      </select>
+      <input type="text" id="new-habit-moment-custom" placeholder="nom du moment (ex: avant le sport)" class="hidden">
       <button class="btn" id="add-habit">Ajouter</button>
     </div>
-    <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone. La "portée" détermine dans quelle vue (Jour/Semaine/Mois) de 🎯 Priorités la tâche apparaîtra.</p>
+    <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone. La "portée" détermine dans quelle vue (Jour/Semaine/Mois) de 🎯 Priorités la tâche apparaîtra. Le "moment" sert juste à regrouper tes routines ci-dessus de façon lisible.</p>
+  </div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Charger un modèle de routine complète</div>
+    <p class="muted">Ajoute d'un coup toute une journée type — tu pourras ensuite supprimer ou adapter chaque bloc.</p>
+    <div class="form-inline">
+      <select id="tpl-mode">${Object.entries(ROUTINE_MODES).map(([k,m]) => `<option value="${k}">${m.label}</option>`).join("")}</select>
+      <select id="tpl-religion">
+        <option value="islam">Prières : Islam (5 prières)</option>
+        <option value="chretien">Prières : Christianisme</option>
+        <option value="aucune">Sans moments de prière</option>
+      </select>
+      <button class="btn secondary" id="load-template">Charger ce modèle</button>
+    </div>
+    <p id="tpl-status" class="muted" style="margin-top:8px"></p>
   </div>
   </div>
   <div class="split-right">${miniPrioritesHTML(["Routine"])}</div>
@@ -1774,6 +1923,13 @@ function attachHandlers(page) {
     typeSelect.addEventListener("change", syncParam);
     syncParam();
   }
+  const momentSelect = document.getElementById("new-habit-moment");
+  const momentCustomInput = document.getElementById("new-habit-moment-custom");
+  if (momentSelect) {
+    const syncMoment = () => momentCustomInput.classList.toggle("hidden", momentSelect.value !== "custom");
+    momentSelect.addEventListener("change", syncMoment);
+    syncMoment();
+  }
   const addHabitBtn = document.getElementById("add-habit");
   if (addHabitBtn) addHabitBtn.addEventListener("click", async () => {
     const name = document.getElementById("new-habit-name").value.trim();
@@ -1789,7 +1945,24 @@ function attachHandlers(page) {
       const alarmVal = document.getElementById("new-habit-alarm").value;
       if (alarmVal) data.alarmTime = alarmVal;
     }
+    if (momentSelect) {
+      data.moment = momentSelect.value;
+      if (momentSelect.value === "custom") data.momentLabel = momentCustomInput.value.trim() || "Personnalisé";
+    }
     await addDoc(col("habits"), data);
+  });
+  const loadTemplateBtn = document.getElementById("load-template");
+  if (loadTemplateBtn) loadTemplateBtn.addEventListener("click", async () => {
+    const mode = document.getElementById("tpl-mode").value;
+    const religion = document.getElementById("tpl-religion").value;
+    const status = document.getElementById("tpl-status");
+    const momentFor = (time) => (time < "12:00" ? "matin" : time < "18:00" ? "midi" : "soir");
+    const blocks = [...ROUTINE_MODES[mode].blocks, ...PRAYER_SETS[religion]].sort((a, b) => a.time.localeCompare(b.time));
+    status.textContent = `Ajout de ${blocks.length} routine(s)...`;
+    const batch = writeBatch(dbFS);
+    blocks.forEach((b) => batch.set(doc(col("habits")), { name: b.name, icon: b.icon, type: "daily", alarmTime: b.time, moment: momentFor(b.time) }));
+    await batch.commit();
+    status.textContent = `${blocks.length} routine(s) ajoutée(s) — supprime ou modifie ce qui ne te convient pas.`;
   });
   document.querySelectorAll("[data-counter-inc]").forEach((el) => {
     el.addEventListener("click", async () => {
