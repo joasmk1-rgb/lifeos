@@ -560,80 +560,80 @@ const ROUTINE_MODES = {
   etudiant: {
     label: "🎓 Étudiant",
     blocks: [
-      { name: "Réveil + hygiène", icon: "🛌", time: "06:30" },
-      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Réveil + hygiène", icon: "🛌", time: "06:30", anchor: "reveil" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00", anchor: "petitdej" },
       { name: "Cours / trajet", icon: "🎓", time: "08:30" },
-      { name: "Déjeuner", icon: "🍽️", time: "12:00" },
+      { name: "Déjeuner", icon: "🍽️", time: "12:00", anchor: "dejeuner" },
       { name: "Étude / devoirs", icon: "📚", time: "13:30" },
       { name: "Sport ou marche", icon: "🏃", time: "16:30" },
-      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Dîner", icon: "🍽️", time: "18:30", anchor: "diner" },
       { name: "Révisions du soir", icon: "📖", time: "19:00" },
       { name: "Planifier demain", icon: "🗒️", time: "22:00" },
-      { name: "Coucher", icon: "🌙", time: "23:00" },
+      { name: "Coucher", icon: "🌙", time: "23:00", anchor: "coucher" },
     ],
   },
   travailpleintemps: {
     label: "💼 Travail temps plein",
     blocks: [
-      { name: "Réveil + étirements", icon: "🛌", time: "06:00" },
-      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Réveil + étirements", icon: "🛌", time: "06:00", anchor: "reveil" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00", anchor: "petitdej" },
       { name: "Trajet", icon: "🚗", time: "07:45" },
       { name: "Travail (matin)", icon: "💼", time: "08:30" },
-      { name: "Déjeuner", icon: "🍽️", time: "12:00" },
+      { name: "Déjeuner", icon: "🍽️", time: "12:00", anchor: "dejeuner" },
       { name: "Travail (après-midi)", icon: "💼", time: "13:00" },
       { name: "Trajet retour", icon: "🚗", time: "17:00" },
-      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Dîner", icon: "🍽️", time: "18:30", anchor: "diner" },
       { name: "Temps perso / sport / famille", icon: "🌿", time: "19:30" },
       { name: "Décompression sans écran", icon: "📴", time: "21:15" },
-      { name: "Coucher", icon: "🌙", time: "22:30" },
+      { name: "Coucher", icon: "🌙", time: "22:30", anchor: "coucher" },
     ],
   },
   travailpartiel: {
     label: "🕒 Travail temps partiel + cours du soir",
     blocks: [
-      { name: "Réveil", icon: "🛌", time: "07:00" },
-      { name: "Petit-déjeuner", icon: "🥐", time: "07:15" },
+      { name: "Réveil", icon: "🛌", time: "07:00", anchor: "reveil" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:15", anchor: "petitdej" },
       { name: "Travail (mi-temps)", icon: "💼", time: "08:30" },
-      { name: "Déjeuner rapide", icon: "🍽️", time: "12:30" },
+      { name: "Déjeuner rapide", icon: "🍽️", time: "12:30", anchor: "dejeuner" },
       { name: "Admin / courses / temps libre", icon: "🗂️", time: "13:15" },
       { name: "Pause ou courte sieste", icon: "😴", time: "15:00" },
       { name: "Révisions avant cours", icon: "📚", time: "15:30" },
       { name: "Trajet vers cours du soir", icon: "🚗", time: "17:00" },
       { name: "Cours du soir", icon: "🎓", time: "18:00" },
-      { name: "Dîner léger", icon: "🍽️", time: "21:30" },
-      { name: "Coucher", icon: "🌙", time: "23:00" },
+      { name: "Dîner léger", icon: "🍽️", time: "21:30", anchor: "diner" },
+      { name: "Coucher", icon: "🌙", time: "23:00", anchor: "coucher" },
     ],
   },
   athlete: {
     label: "🏅 Athlète",
     blocks: [
-      { name: "Réveil", icon: "🛌", time: "05:30" },
-      { name: "Petit-déjeuner costaud", icon: "🥐", time: "06:00" },
+      { name: "Réveil", icon: "🛌", time: "05:30", anchor: "reveil" },
+      { name: "Petit-déjeuner costaud", icon: "🥐", time: "06:00", anchor: "petitdej" },
       { name: "Entraînement matinal", icon: "🏋️", time: "06:30" },
       { name: "Douche + cours/travail", icon: "🚿", time: "08:30" },
-      { name: "Déjeuner riche", icon: "🍽️", time: "12:00" },
+      { name: "Déjeuner riche", icon: "🍽️", time: "12:00", anchor: "dejeuner" },
       { name: "Cours/travail (après-midi)", icon: "📚", time: "13:00" },
       { name: "2e séance ou récup active", icon: "🏃", time: "17:00" },
-      { name: "Dîner", icon: "🍽️", time: "19:00" },
+      { name: "Dîner", icon: "🍽️", time: "19:00", anchor: "diner" },
       { name: "Étirements / mobilité", icon: "🧘", time: "20:00" },
-      { name: "Coucher (priorité récup)", icon: "🌙", time: "22:00" },
+      { name: "Coucher (priorité récup)", icon: "🌙", time: "22:00", anchor: "coucher" },
     ],
   },
   blocus: {
     label: "🔥 Blocus / étude intensive",
     blocks: [
-      { name: "Réveil (pas plus tard !)", icon: "🛌", time: "06:30" },
-      { name: "Petit-déjeuner", icon: "🥐", time: "07:00" },
+      { name: "Réveil (pas plus tard !)", icon: "🛌", time: "06:30", anchor: "reveil" },
+      { name: "Petit-déjeuner", icon: "🥐", time: "07:00", anchor: "petitdej" },
       { name: "Bloc d'étude 1 (le plus dur)", icon: "📚", time: "07:30" },
       { name: "Bloc d'étude 2", icon: "📚", time: "10:15" },
-      { name: "Déjeuner — vraie coupure", icon: "🍽️", time: "12:00" },
+      { name: "Déjeuner — vraie coupure", icon: "🍽️", time: "12:00", anchor: "dejeuner" },
       { name: "Bloc d'étude 3", icon: "📚", time: "13:30" },
       { name: "Pause active (marche, sans écran)", icon: "🚶", time: "15:30" },
       { name: "Bloc d'étude 4", icon: "📚", time: "16:00" },
-      { name: "Dîner", icon: "🍽️", time: "18:30" },
+      { name: "Dîner", icon: "🍽️", time: "18:30", anchor: "diner" },
       { name: "Relecture / fiches (léger)", icon: "📖", time: "19:30" },
       { name: "Coupure totale sans écran", icon: "📴", time: "21:15" },
-      { name: "Coucher", icon: "🌙", time: "22:30" },
+      { name: "Coucher", icon: "🌙", time: "22:30", anchor: "coucher" },
     ],
   },
 };
@@ -675,20 +675,7 @@ pages.habitudes = () => {
     </div>
     <p class="muted" style="margin-top:8px">⏰ L'alarme sonne uniquement si le Life OS est ouvert dans un onglet — pas une vraie alarme téléphone. La "portée" détermine dans quelle vue (Jour/Semaine/Mois) de 🎯 Priorités la tâche apparaîtra. Le "moment" sert juste à regrouper tes routines ci-dessus de façon lisible.</p>
   </div>
-  <div class="card">
-    <div class="section-title" style="margin-top:0">Charger un modèle de routine complète</div>
-    <p class="muted">Ajoute d'un coup toute une journée type — tu pourras ensuite supprimer ou adapter chaque bloc.</p>
-    <div class="form-inline">
-      <select id="tpl-mode">${Object.entries(ROUTINE_MODES).map(([k,m]) => `<option value="${k}">${m.label}</option>`).join("")}</select>
-      <select id="tpl-religion">
-        <option value="islam">Prières : Islam (5 prières)</option>
-        <option value="chretien">Prières : Christianisme</option>
-        <option value="aucune">Sans moments de prière</option>
-      </select>
-      <button class="btn secondary" id="load-template">Charger ce modèle</button>
-    </div>
-    <p id="tpl-status" class="muted" style="margin-top:8px"></p>
-  </div>
+  <p class="muted" style="margin-top:8px">Envie de partir d'une journée type toute faite ? Va dans <span class="muted" data-goto="reglages" style="cursor:pointer;text-decoration:underline">⚙️ Réglages</span> → Modèles de routine.</p>
   </div>
   <div class="split-right">${miniPrioritesHTML(["Routine"])}</div>
   </div>`;
@@ -759,6 +746,8 @@ pages.emploi = () => {
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   return `
   <h2>💼 Recherche d'emploi</h2>
+  <div class="split-view">
+  <div class="split-left">
   ${jobPilotagePanel()}
   <div class="card">
     <div class="form-inline">
@@ -794,7 +783,10 @@ pages.emploi = () => {
         <td><input type="text" data-job-notes="${j.id}" value="${(j.notes || "").replace(/"/g, "&quot;")}"></td>
         <td><button class="close-x" data-del-job="${j.id}">✕</button></td>
       </tr>`).join("") || `<tr><td colspan="8" class="empty">Aucune candidature.</td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table></div>
+  </div>
+  <div class="split-right">${miniPrioritesHTML(["Emploi"])}</div>
+  </div>`;
 };
 
 /* ---------- SKILLS ---------- */
@@ -885,6 +877,30 @@ pages.reglages = () => `
       <button class="btn" id="change-password-btn">Valider</button>
     </div>
     <p id="change-password-status" class="hint"></p>
+  </div>
+  <div class="card">
+    <div class="section-title" style="margin-top:0">Modèles de routine</div>
+    <p class="muted">Coche un ou plusieurs modes à combiner (ex: Athlète + Travail temps plein) — les blocs spécifiques de chaque mode s'additionnent, et pour le réveil/coucher/repas je garde une seule version fusionnée (le plus tôt pour le réveil, le plus tard pour le coucher), sauf si tu fixes toi-même l'horaire ci-dessous.</p>
+    <div class="form-inline" style="flex-wrap:wrap">
+      ${Object.entries(ROUTINE_MODES).map(([k,m]) => `<label style="flex:0 0 auto"><input type="checkbox" class="tpl-mode-check" value="${k}"> ${m.label}</label>`).join(" ")}
+    </div>
+    <div class="section-title" style="margin:14px 0 6px">Tes horaires idéaux (optionnel — laisse vide pour laisser le modèle décider)</div>
+    <div class="form-inline">
+      <label class="muted" style="flex:1">Réveil <input type="time" id="tpl-reveil"></label>
+      <label class="muted" style="flex:1">Petit-déj <input type="time" id="tpl-petitdej"></label>
+      <label class="muted" style="flex:1">Déjeuner <input type="time" id="tpl-dejeuner"></label>
+      <label class="muted" style="flex:1">Dîner <input type="time" id="tpl-diner"></label>
+      <label class="muted" style="flex:1">Coucher <input type="time" id="tpl-coucher"></label>
+    </div>
+    <div class="form-inline" style="margin-top:10px">
+      <select id="tpl-religion">
+        <option value="islam">Prières : Islam (5 prières)</option>
+        <option value="chretien">Prières : Christianisme</option>
+        <option value="aucune">Sans moments de prière</option>
+      </select>
+      <button class="btn secondary" id="load-template">Charger ces modèles</button>
+    </div>
+    <p id="tpl-status" class="muted" style="margin-top:8px"></p>
   </div>`;
 
 /* ---------- ALARMES (tant que l'onglet est ouvert) ---------- */
@@ -1953,16 +1969,52 @@ function attachHandlers(page) {
   });
   const loadTemplateBtn = document.getElementById("load-template");
   if (loadTemplateBtn) loadTemplateBtn.addEventListener("click", async () => {
-    const mode = document.getElementById("tpl-mode").value;
+    const modes = Array.from(document.querySelectorAll(".tpl-mode-check:checked")).map((el) => el.value);
     const religion = document.getElementById("tpl-religion").value;
     const status = document.getElementById("tpl-status");
+    if (!modes.length) { status.textContent = "Coche au moins un mode."; return; }
     const momentFor = (time) => (time < "12:00" ? "matin" : time < "18:00" ? "midi" : "soir");
-    const blocks = [...ROUTINE_MODES[mode].blocks, ...PRAYER_SETS[religion]].sort((a, b) => a.time.localeCompare(b.time));
-    status.textContent = `Ajout de ${blocks.length} routine(s)...`;
+
+    // Horaires idéaux fixés à la main (optionnels)
+    const overrides = {
+      reveil: document.getElementById("tpl-reveil").value,
+      petitdej: document.getElementById("tpl-petitdej").value,
+      dejeuner: document.getElementById("tpl-dejeuner").value,
+      diner: document.getElementById("tpl-diner").value,
+      coucher: document.getElementById("tpl-coucher").value,
+    };
+    // Règle par défaut quand plusieurs modes se contredisent : le plus tôt pour le réveil, le plus tard pour le coucher,
+    // le plus tôt pour les repas (pour ne rater aucune contrainte), sauf si l'utilisateur a fixé un horaire lui-même.
+    const ANCHOR_RULE = { reveil: "min", coucher: "max", petitdej: "min", dejeuner: "min", diner: "min" };
+    const ANCHOR_META = {
+      reveil: { name: "Réveil", icon: "🛌" }, coucher: { name: "Coucher", icon: "🌙" },
+      petitdej: { name: "Petit-déjeuner", icon: "🥐" }, dejeuner: { name: "Déjeuner", icon: "🍽️" }, diner: { name: "Dîner", icon: "🍽️" },
+    };
+
+    const allBlocks = modes.flatMap((k) => ROUTINE_MODES[k].blocks);
+    const anchors = {};
+    const others = [];
+    allBlocks.forEach((b) => {
+      if (b.anchor) {
+        if (!anchors[b.anchor]) anchors[b.anchor] = [];
+        anchors[b.anchor].push(b.time);
+      } else {
+        others.push(b);
+      }
+    });
+    const finalBlocks = [...others];
+    Object.entries(anchors).forEach(([anchor, times]) => {
+      const time = overrides[anchor] || (ANCHOR_RULE[anchor] === "max" ? times.sort().slice(-1)[0] : times.sort()[0]);
+      finalBlocks.push({ name: ANCHOR_META[anchor].name, icon: ANCHOR_META[anchor].icon, time });
+    });
+    finalBlocks.push(...PRAYER_SETS[religion]);
+    finalBlocks.sort((a, b) => a.time.localeCompare(b.time));
+
+    status.textContent = `Ajout de ${finalBlocks.length} routine(s)...`;
     const batch = writeBatch(dbFS);
-    blocks.forEach((b) => batch.set(doc(col("habits")), { name: b.name, icon: b.icon, type: "daily", alarmTime: b.time, moment: momentFor(b.time) }));
+    finalBlocks.forEach((b) => batch.set(doc(col("habits")), { name: b.name, icon: b.icon, type: "daily", alarmTime: b.time, moment: momentFor(b.time) }));
     await batch.commit();
-    status.textContent = `${blocks.length} routine(s) ajoutée(s) — supprime ou modifie ce qui ne te convient pas.`;
+    status.textContent = `${finalBlocks.length} routine(s) ajoutée(s) — supprime ou modifie ce qui ne te convient pas.`;
   });
   document.querySelectorAll("[data-counter-inc]").forEach((el) => {
     el.addEventListener("click", async () => {
